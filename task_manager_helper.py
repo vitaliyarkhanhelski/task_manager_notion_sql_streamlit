@@ -9,6 +9,7 @@ Classes:
 
 import streamlit as st
 import time
+import os
 from task_manager_interface import TaskManagerInterface
 from notion_manager import NotionTaskManager
 from sql_manager import SqlTaskManager
@@ -180,9 +181,19 @@ class TaskManagerHelper:
         """
         with st.spinner("Loading tasks..."):
             if status_filter == "All":
-                return task_manager.list_tasks()
+                tasks = task_manager.list_tasks()
             else:
-                return task_manager.list_tasks(status_filter)
+                tasks = task_manager.list_tasks(status_filter)
+            
+            # Write results to console using os.write
+            os.write(1, f"\n📋 Fetched Tasks (Filter: {status_filter}):\n".encode())
+            os.write(1, f"Total: {len(tasks) if tasks else 0} tasks\n".encode())
+            if tasks:
+                for task in tasks:
+                    os.write(1, f"  - {task['name']} | Status: {task['status']}\n".encode())
+            os.write(1, b"\n")
+            
+            return tasks
     
     @staticmethod
     def show_task_list(tasks: list, task_manager: TaskManagerInterface, style_helper: StyleHelper, database_backend: str):
@@ -396,6 +407,9 @@ class TaskManagerHelper:
         else:
             # For Notion, only show refresh button
             if st.button("🔄 Refresh Tasks", type="secondary"):
+                os.write(1, b"\n" + b"="*50 + b"\n")
+                os.write(1, b"\xF0\x9F\x94\x84 REFRESH TASKS CLICKED (Notion)\n")
+                os.write(1, b"="*50 + b"\n")
                 st.rerun()
     
     @staticmethod
