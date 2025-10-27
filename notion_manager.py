@@ -18,6 +18,7 @@ Functions:
 
 from notion_client import Client
 import streamlit as st
+import os
 from task_manager_interface import TaskManagerInterface
 
 class NotionTaskManager(TaskManagerInterface):
@@ -51,15 +52,30 @@ class NotionTaskManager(TaskManagerInterface):
         """Initialize the NotionTaskManager. Only runs once for the singleton instance."""
         # Only initialize once
         if not hasattr(self, 'notion'):
-            auth_token = st.secrets["NOTION_AUTH_TOKEN"]
-            database_id = st.secrets["NOTION_DATABASE_ID"]
-            self.notion = Client(auth=auth_token)
-            self.database_id = database_id
+            try:
+                auth_token = st.secrets["NOTION_AUTH_TOKEN"]
+                database_id = st.secrets["NOTION_DATABASE_ID"]
+                
+                if not auth_token or not database_id:
+                    raise ValueError("Notion credentials are empty")
+                
+                self.notion = Client(auth=auth_token)
+                self.database_id = database_id
+                print(f"✅ Notion Manager initialized successfully")
+                print(f"   Database ID: {database_id[:8]}...")
+            except KeyError as e:
+                error_msg = f"❌ Missing Notion secret: {e}. Please configure secrets in Streamlit Cloud or .streamlit/secrets.toml"
+                print(error_msg)
+                raise KeyError(error_msg)
+            except Exception as e:
+                error_msg = f"❌ Failed to initialize Notion client: {e}"
+                print(error_msg)
+                raise
     
     def list_tasks(self, status_filter=None):
         """List all tasks, optionally filtered by status"""
         try:
-            print(f"Debug: Querying database {self.database_id} with filter: {status_filter}")
+            os.write(1, f"\n🔍 DEBUG: Querying database {self.database_id} with filter: {status_filter}\n".encode())
             
             if status_filter:
                 response = self.notion.databases.query(
@@ -74,22 +90,37 @@ class NotionTaskManager(TaskManagerInterface):
             else:
                 response = self.notion.databases.query(database_id=self.database_id)
             
-            print(f"Debug: API returned {len(response['results'])} pages")
+            os.write(1, f"📊 DEBUG: API returned {len(response['results'])} pages\n".encode())
             
             tasks = []
             for page in response['results']:
-                print(f"Debug: Processing page {page['id']}")
-                task = {
-                    'id': page['id'],
-                    'name': page['properties']['Name']['title'][0]['text']['content'],
-                    'status': page['properties']['Status']['status']['name']
-                }
-                tasks.append(task)
+                # Check if page is archived
+                is_archived = page.get('archived', False)
+                os.write(1, f"   Processing page {page['id'][:8]}... (archived: {is_archived})\n".encode())
+                
+                if is_archived:
+                    os.write(1, "   ⚠️ Skipping archived page\n".encode())
+                    continue
+                
+                try:
+                    task = {
+                        'id': page['id'],
+                        'name': page['properties']['Name']['title'][0]['text']['content'],
+                        'status': page['properties']['Status']['status']['name']
+                    }
+                    tasks.append(task)
+                    os.write(1, f"   ✅ Added: {task['name']} | {task['status']}\n".encode())
+                except (KeyError, IndexError) as e:
+                    os.write(1, f"   ❌ Error parsing page: {e}\n".encode())
+                    continue
             
-            print(f"Debug: Returning {len(tasks)} tasks")
+            os.write(1, f"✅ DEBUG: Returning {len(tasks)} tasks\n\n".encode())
             return tasks
         except Exception as e:
-            print(f"Error listing tasks: {e}")
+            error_msg = f"❌ Error listing tasks: {type(e).__name__}: {str(e)}\n"
+            os.write(1, error_msg.encode())
+            import traceback
+            traceback.print_exc()
             return []
     
     def add_task(self, name, status="Not Started"):

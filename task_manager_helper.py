@@ -82,9 +82,22 @@ class TaskManagerHelper:
         if backend == DB_NOTION:
             try:
                 return NotionTaskManager.get_instance()
+            except KeyError as e:
+                st.error(f"❌ Notion secrets not configured: {e}")
+                st.warning("⚠️ **To use Notion on Streamlit Cloud:**")
+                st.code("""
+1. Go to your app dashboard
+2. Click Settings ⚙️ → Secrets
+3. Add:
+   NOTION_AUTH_TOKEN = "secret_xxxxx"
+   NOTION_DATABASE_ID = "xxxxx"
+4. Save and restart
+                """, language="text")
+                st.info("💡 Falling back to SQLite for now.")
+                return SqlTaskManager.get_instance()
             except Exception as e:
-                st.error(f"❌ Notion configuration error: {e}")
-                st.info("💡 Falling back to SQLite. Please configure Notion secrets to use Notion backend.")
+                st.error(f"❌ Notion connection error: {e}")
+                st.info("💡 Falling back to SQLite. Check your Notion credentials and database permissions.")
                 return SqlTaskManager.get_instance()
         else:
             return SqlTaskManager.get_instance()
